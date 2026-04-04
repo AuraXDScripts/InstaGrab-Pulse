@@ -1,5 +1,5 @@
 -- =============================================================
--- Pulse Insta Grab - Anti Lag cu Restore la Normal (Low Lag)
+-- Pulse Insta Grab - Anti Lag + Ultra Mode + Auto Spam pe V
 -- =============================================================
 repeat task.wait() until game:IsLoaded()
 
@@ -27,7 +27,7 @@ local LastActionTime = 0
 local antiLagEnabled = false
 local ultraModeEnabled = false
 
--- Saved Original Settings (pentru Restore)
+-- Saved Original Settings
 local originalSettings = {}
 
 local function saveOriginalSettings()
@@ -45,13 +45,13 @@ end
 local function restoreOriginalSettings()
     if next(originalSettings) == nil then return end
     
-    Lighting.GlobalShadows = originalSettings.GlobalShadows
-    Lighting.FogEnd = originalSettings.FogEnd
-    Lighting.Brightness = originalSettings.Brightness
-    Lighting.EnvironmentDiffuseScale = originalSettings.EnvironmentDiffuseScale
-    Lighting.EnvironmentSpecularScale = originalSettings.EnvironmentSpecularScale
-    Lighting.ClockTime = originalSettings.ClockTime
-    Lighting.GeographicLatitude = originalSettings.GeographicLatitude
+    Lighting.GlobalShadows = originalSettings.GlobalShadows or true
+    Lighting.FogEnd = originalSettings.FogEnd or 100000
+    Lighting.Brightness = originalSettings.Brightness or 1
+    Lighting.EnvironmentDiffuseScale = originalSettings.EnvironmentDiffuseScale or 1
+    Lighting.EnvironmentSpecularScale = originalSettings.EnvironmentSpecularScale or 1
+    Lighting.ClockTime = originalSettings.ClockTime or 14
+    Lighting.GeographicLatitude = originalSettings.GeographicLatitude or 23.5
 end
 
 local function applyAntiLag(enabled)
@@ -66,7 +66,6 @@ local function applyAntiLag(enabled)
         Lighting.ClockTime = 12
         Lighting.GeographicLatitude = 0
 
-        -- Low quality pentru toate părțile
         for _, v in ipairs(Workspace:GetDescendants()) do
             if v:IsA("BasePart") or v:IsA("MeshPart") or v:IsA("UnionOperation") then
                 v.Material = Enum.Material.Plastic
@@ -81,9 +80,7 @@ end
 
 local function applyUltraMode(enabled)
     if enabled then
-        applyAntiLag(true)  -- Ultra = Anti Lag + extra
-        
-        -- Extra optimizări Ultra
+        applyAntiLag(true)
         for _, v in ipairs(Workspace:GetDescendants()) do
             if v:IsA("ParticleEmitter") or v:IsA("Trail") or v:IsA("Beam") then
                 v.Enabled = false
@@ -317,7 +314,7 @@ local function trySteal(prompt)
     setProgress(0, true)
 end
 
--- ====================== BUTTON LOGIC ======================
+-- ====================== BUTTON & KEYBIND LOGIC ======================
 stealButton.MouseButton1Click:Connect(function()
     local animal = getNearestAnimal()
     if animal and animal.prompt then
@@ -328,6 +325,21 @@ end)
 autoButton.MouseButton1Click:Connect(function()
     AutoSpamEnabled = not AutoSpamEnabled
     autoButton.Text = AutoSpamEnabled and "AUTO SPAM: ON" or "AUTO SPAM: OFF"
+end)
+
+-- Keybind V pentru Auto Spam
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.KeyCode == Enum.KeyCode.V then
+        AutoSpamEnabled = not AutoSpamEnabled
+        autoButton.Text = AutoSpamEnabled and "AUTO SPAM: ON" or "AUTO SPAM: OFF"
+        
+        if AutoSpamEnabled then
+            autoButton.BackgroundColor3 = Color3.fromRGB(40, 70, 40)
+        else
+            autoButton.BackgroundColor3 = Color3.fromRGB(30,30,35)
+        end
+    end
 end)
 
 antiLagBtn.MouseButton1Click:Connect(function()
@@ -372,4 +384,4 @@ task.spawn(function()
     end
 end)
 
-print("Pulse Insta Grab - Anti Lag with Restore Loaded")
+print("Pulse Insta Grab - Anti Lag + Auto Spam pe V Loaded")
