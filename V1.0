@@ -1,5 +1,5 @@
 -- =============================================================
--- Pulse Insta Grab - Clean UI + Animations + Safe Retry x3
+-- Pulse Insta Grab - Anti Lag + Ultra Mode + Auto Spam (Alb-Negru Curat)
 -- =============================================================
 repeat task.wait() until game:IsLoaded()
 
@@ -11,7 +11,6 @@ local Workspace = game:GetService("Workspace")
 local Lighting = game:GetService("Lighting")
 
 local player = Players.LocalPlayer
-local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
 
 -- ====================== SETTINGS ======================
 local GRAB_RADIUS = 11
@@ -22,10 +21,96 @@ local allAnimalsCache = {}
 local hrpCache = nil
 local LastActionTime = 0
 
--- Retry config (SAFE)
-local MAX_RETRIES = 3
+local antiLagEnabled = false
+local ultraModeEnabled = false
 
--- ====================== GUI RESET ======================
+-- Saved Original Settings
+local originalSettings = {}
+local originalDescendants = {}
+
+local function saveOriginalSettings()
+    originalSettings = {
+        GlobalShadows = Lighting.GlobalShadows,
+        FogEnd = Lighting.FogEnd,
+        Brightness = Lighting.Brightness,
+        EnvironmentDiffuseScale = Lighting.EnvironmentDiffuseScale,
+        EnvironmentSpecularScale = Lighting.EnvironmentSpecularScale,
+        ClockTime = Lighting.ClockTime,
+        GeographicLatitude = Lighting.GeographicLatitude,
+    }
+end
+
+local function restoreOriginalSettings()
+    if next(originalSettings) == nil then return end
+    
+    Lighting.GlobalShadows = originalSettings.GlobalShadows or true
+    Lighting.FogEnd = originalSettings.FogEnd or 100000
+    Lighting.Brightness = originalSettings.Brightness or 1
+    Lighting.EnvironmentDiffuseScale = originalSettings.EnvironmentDiffuseScale or 1
+    Lighting.EnvironmentSpecularScale = originalSettings.EnvironmentSpecularScale or 1
+    Lighting.ClockTime = originalSettings.ClockTime or 14
+    Lighting.GeographicLatitude = originalSettings.GeographicLatitude or 23.5
+end
+
+local function applyAntiLag(enabled)
+    if enabled then
+        if next(originalSettings) == nil then saveOriginalSettings() end
+        
+        Lighting.GlobalShadows = false
+        Lighting.FogEnd = 10000000
+        Lighting.Brightness = 1.2
+        Lighting.EnvironmentDiffuseScale = 0
+        Lighting.EnvironmentSpecularScale = 0
+        Lighting.ClockTime = 12
+        Lighting.GeographicLatitude = 0
+
+        for _, v in ipairs(Workspace:GetDescendants()) do
+            if (v:IsA("BasePart") or v:IsA("MeshPart") or v:IsA("UnionOperation")) then
+                if not v:FindFirstAncestorWhichIsA("Accessory") then
+                    v.Material = Enum.Material.Plastic
+                    v.Reflectance = 0
+                    v.CastShadow = false
+                end
+            end
+        end
+    else
+        restoreOriginalSettings()
+    end
+end
+
+local function applyUltraMode(enabled)
+    if enabled then
+        if next(originalSettings) == nil then saveOriginalSettings() end
+        applyAntiLag(true)
+
+        originalDescendants = {}
+        for _, v in ipairs(Workspace:GetDescendants()) do
+            if v:IsA("ParticleEmitter") or v:IsA("Trail") or v:IsA("Beam") then
+                table.insert(originalDescendants, {obj = v, Enabled = v.Enabled})
+                v.Enabled = false
+            end
+            
+            if (v:IsA("Accessory") or v:IsA("MeshPartAccessory")) and not v.Name:lower():find("hair") then
+                pcall(function()
+                    table.insert(originalDescendants, {obj = v, Parent = v.Parent})
+                    v.Parent = nil
+                end)
+            end
+        end
+    else
+        for _, data in ipairs(originalDescendants) do
+            if data.obj and data.obj.Parent == nil then
+                pcall(function() data.obj.Parent = data.Parent end)
+            elseif data.obj and data.Enabled ~= nil then
+                data.obj.Enabled = data.Enabled
+            end
+        end
+        originalDescendants = {}
+        restoreOriginalSettings()
+    end
+end
+
+-- ====================== GUI ======================
 if CoreGui:FindFirstChild("PulseInstaGrab") then 
     CoreGui.PulseInstaGrab:Destroy() 
 end
@@ -35,197 +120,252 @@ sg.Name = "PulseInstaGrab"
 sg.ResetOnSpawn = false
 sg.Parent = CoreGui
 
--- ====================== MAIN FRAME ======================
 local mainFrame = Instance.new("Frame")
-mainFrame.Size = isMobile and UDim2.new(0.9, 0, 0, 295) or UDim2.new(0, 310, 0, 285)
+mainFrame.Size = UDim2.new(0, 280, 0, 260)
 mainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
 mainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
-mainFrame.BackgroundColor3 = Color3.fromRGB(12, 12, 16)
-mainFrame.BackgroundTransparency = 1
+mainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+mainFrame.BackgroundTransparency = 0.45        -- 0.45
 mainFrame.Active = true
 mainFrame.Draggable = true
 mainFrame.Parent = sg
 
-Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 16)
+Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 14)
 
--- Fade in
-TweenService:Create(mainFrame, TweenInfo.new(0.35), {
-    BackgroundTransparency = 0.45
-}):Play()
+local mainStroke = Instance.new("UIStroke", mainFrame)
+mainStroke.Thickness = 1.5
+mainStroke.Color = Color3.fromRGB(255, 255, 255)
+mainStroke.Transparency = 0.5                  -- 0.5
 
--- Border gradient
-local stroke = Instance.new("UIStroke", mainFrame)
-stroke.Thickness = 1.4
-stroke.Transparency = 0.2
-
-local grad = Instance.new("UIGradient", stroke)
-grad.Color = ColorSequence.new{
-    ColorSequenceKeypoint.new(0, Color3.fromRGB(255,255,255)),
-    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(180,180,180)),
-    ColorSequenceKeypoint.new(1, Color3.fromRGB(255,255,255))
-}
-
--- ====================== BACKGROUND LINES ======================
-local animContainer = Instance.new("Frame")
-animContainer.Size = UDim2.new(1,0,1,0)
-animContainer.BackgroundTransparency = 1
-animContainer.ClipsDescendants = true
-animContainer.ZIndex = 0
-animContainer.Parent = mainFrame
-
-local function spawnLine()
-    local line = Instance.new("Frame")
-
-    local height = math.random(1,2)
-    local length = math.random(40,120)
-
-    line.Size = UDim2.new(0, length, 0, height)
-    line.Position = UDim2.new(0, -length, math.random(), 0)
-
-    line.BackgroundColor3 = Color3.fromRGB(255,255,255)
-    line.BackgroundTransparency = 0.8
-    line.BorderSizePixel = 0
-    line.Parent = animContainer
-
-    Instance.new("UICorner", line).CornerRadius = UDim.new(1,0)
-
-    local tween = TweenService:Create(line, TweenInfo.new(math.random(4,7)), {
-        Position = UDim2.new(1, length, line.Position.Y.Scale, 0),
-        Size = UDim2.new(0, 10, 0, height),
-        BackgroundTransparency = 1
-    })
-
-    tween:Play()
-    tween.Completed:Connect(function()
-        line:Destroy()
-    end)
-end
-
-task.spawn(function()
-    while mainFrame.Parent do
-        spawnLine()
-        task.wait(math.random(8,14)/10)
-    end
-end)
-
--- ====================== TITLE ======================
+-- Title
 local title = Instance.new("TextLabel", mainFrame)
-title.Size = UDim2.new(1,0,0,46)
+title.Size = UDim2.new(1, 0, 0, 46)
 title.BackgroundTransparency = 1
 title.Text = "PULSE GRABBER"
-title.TextColor3 = Color3.fromRGB(255,255,255)
-title.TextScaled = true
+title.TextColor3 = Color3.fromRGB(255, 255, 255)
+title.TextSize = 24
 title.Font = Enum.Font.GothamBlack
+title.Parent = mainFrame
 
--- ====================== BUTTON ======================
-local function createButton(text, y)
+local titleStroke = Instance.new("UIStroke", title)
+titleStroke.Thickness = 0.8
+titleStroke.Color = Color3.fromRGB(200, 200, 200)
+
+local subtitle = Instance.new("TextLabel", mainFrame)
+subtitle.Size = UDim2.new(1, 0, 0, 16)
+subtitle.Position = UDim2.new(0, 0, 0, 42)
+subtitle.BackgroundTransparency = 1
+subtitle.Text = "Instant Grab • Auto Spam • Low Lag"
+subtitle.TextColor3 = Color3.fromRGB(180, 180, 180)
+subtitle.TextSize = 12.5
+subtitle.Font = Enum.Font.Gotham
+subtitle.Parent = mainFrame
+
+-- Small Buttons
+local function createSmallButton(text, xPos)
     local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(0.85,0,0,46)
-    btn.Position = UDim2.new(0.5,0,0,y)
-    btn.AnchorPoint = Vector2.new(0.5,0)
-    btn.BackgroundColor3 = Color3.fromRGB(30,30,35)
+    btn.Size = UDim2.new(0.46, 0, 0, 36)
+    btn.Position = UDim2.new(xPos, 0, 0, 105)
+    btn.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+    btn.BackgroundTransparency = 0.45               -- 0.45
     btn.Text = text
-    btn.TextColor3 = Color3.fromRGB(255,255,255)
-    btn.TextScaled = true
-    btn.Font = Enum.Font.GothamBold
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.TextSize = 13
+    btn.Font = Enum.Font.GothamSemibold
     btn.Parent = mainFrame
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 10)
     
-    Instance.new("UICorner", btn).CornerRadius = UDim.new(0,12)
-
+    local s = Instance.new("UIStroke", btn)
+    s.Thickness = 1
+    s.Color = Color3.fromRGB(255, 255, 255)
+    s.Transparency = 0.5                            -- 0.5
     return btn
 end
 
-local stealButton = createButton("INSTANT STEAL", 120)
-local autoButton = createButton("AUTO: OFF", 180)
+local antiLagBtn = createSmallButton("ANTI LAG: OFF", 0.04)
+local ultraBtn   = createSmallButton("ULTRA MODE: OFF", 0.52)
 
--- ====================== PROGRESS ======================
-local progress = Instance.new("Frame", mainFrame)
-progress.Size = UDim2.new(0.85,0,0,10)
-progress.Position = UDim2.new(0.5,0,0,240)
-progress.AnchorPoint = Vector2.new(0.5,0)
-progress.BackgroundColor3 = Color3.fromRGB(20,20,25)
+-- Progress Bar (exact sub frame, cu mică distanțare)
+local progressFrame = Instance.new("Frame")
+progressFrame.Size = UDim2.new(0, 255, 0, 22)
+progressFrame.Position = UDim2.new(0.5, 0, 1, 12)   -- exact sub mainFrame + 12 pixeli distanță
+progressFrame.AnchorPoint = Vector2.new(0.5, 0)
+progressFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+progressFrame.BackgroundTransparency = 0.4           -- 0.4
+progressFrame.Parent = sg
+Instance.new("UICorner", progressFrame).CornerRadius = UDim.new(0, 12)
 
-Instance.new("UICorner", progress)
+local progressBar = Instance.new("Frame", progressFrame)
+progressBar.Size = UDim2.new(0, 0, 1, 0)
+progressBar.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+Instance.new("UICorner", progressBar).CornerRadius = UDim.new(0, 10)
 
-local bar = Instance.new("Frame", progress)
-bar.Size = UDim2.new(0,0,1,0)
-bar.BackgroundColor3 = Color3.fromRGB(255,255,255)
-Instance.new("UICorner", bar)
+local progressText = Instance.new("TextLabel", progressFrame)
+progressText.Size = UDim2.new(1,0,1,0)
+progressText.BackgroundTransparency = 1
+progressText.Text = "0%"
+progressText.TextColor3 = Color3.fromRGB(255,255,255)
+progressText.TextSize = 13.5
+progressText.Font = Enum.Font.GothamBold
 
-local function setProgress(p)
-    TweenService:Create(bar, TweenInfo.new(0.25), {
-        Size = UDim2.new(p/100,0,1,0)
-    }):Play()
+-- Main Buttons
+local function createMainButton(yPos, text, color)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0.88, 0, 0, 44)
+    btn.Position = UDim2.new(0.5, 0, 0, yPos)
+    btn.AnchorPoint = Vector2.new(0.5, 0)
+    btn.BackgroundColor3 = color
+    btn.BackgroundTransparency = 0.45               -- 0.45
+    btn.Text = text
+    btn.TextColor3 = Color3.fromRGB(255,255,255)
+    btn.TextSize = 15.5
+    btn.Font = Enum.Font.GothamBold
+    btn.Parent = mainFrame
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 12)
+    
+    local s = Instance.new("UIStroke", btn)
+    s.Thickness = 1.25
+    s.Color = Color3.fromRGB(255, 255, 255)
+    s.Transparency = 0.5                            -- 0.5
+    return btn
 end
 
--- ====================== CORE ======================
+local stealButton = createMainButton(150, "INSTANT STEAL", Color3.fromRGB(40, 40, 40))
+local autoButton  = createMainButton(200, "AUTO SPAM: OFF", Color3.fromRGB(30, 30, 30))
+
+local statusLabel = Instance.new("TextLabel", mainFrame)
+statusLabel.Size = UDim2.new(1, -30, 0, 20)
+statusLabel.Position = UDim2.new(0, 15, 1, -28)
+statusLabel.BackgroundTransparency = 1
+statusLabel.Text = "STATUS: IDLE"
+statusLabel.TextColor3 = Color3.fromRGB(170,170,170)
+statusLabel.TextSize = 13
+statusLabel.Font = Enum.Font.Gotham
+
+-- ====================== CORE LOGIC ======================
+local function setProgress(percent, instant)
+    TweenService:Create(progressBar, TweenInfo.new(instant and 0.04 or 0.55, Enum.EasingStyle.Quint), 
+        {Size = UDim2.new(percent/100, 0, 1, 0)}):Play()
+    progressText.Text = math.floor(percent) .. "%"
+end
+
 local function getHRP()
+    if hrpCache and hrpCache.Parent then return hrpCache end
     local char = player.Character
-    return char and char:FindFirstChild("HumanoidRootPart")
+    if char then hrpCache = char:FindFirstChild("HumanoidRootPart") end
+    return hrpCache
 end
 
-local function getNearestAnimal()
-    local hrp = getHRP()
-    if not hrp then return end
-
-    for _, v in ipairs(Workspace:GetDescendants()) do
-        if v:IsA("ProximityPrompt") then
-            local dist = (v.Parent.WorldPosition - hrp.Position).Magnitude
-            if dist < GRAB_RADIUS then
-                return v
+local function rebuildAnimalCache()
+    allAnimalsCache = {}
+    local plots = Workspace:FindFirstChild("Plots")
+    if not plots then return end
+    for _, plot in ipairs(plots:GetChildren()) do
+        local podiums = plot:FindFirstChild("AnimalPodiums")
+        if podiums then
+            for _, podium in ipairs(podiums:GetChildren()) do
+                local spawn = podium:FindFirstChild("Base") and podium.Base:FindFirstChild("Spawn")
+                if spawn then
+                    local prompt = spawn.PromptAttachment:FindFirstChildOfClass("ProximityPrompt")
+                    if prompt then
+                        table.insert(allAnimalsCache, {worldPosition = podium:GetPivot().Position, prompt = prompt})
+                    end
+                end
             end
         end
     end
 end
 
--- SAFE retry x3 (NU simultan)
-local function trySteal(prompt)
-    if not prompt then return end
-    if (os.clock() - LastActionTime) < BASE_COOLDOWN then return end
-
-    LastActionTime = os.clock()
-    setProgress(100)
-
-    for i = 1, MAX_RETRIES do
-        pcall(function()
-            prompt.HoldDuration = 0
-            prompt:InputHoldBegin()
-            task.wait(0.05 + math.random()*0.05)
-            prompt:InputHoldEnd()
-            prompt:InputTrigger()
-        end)
-
-        task.wait(0.05)
+local function getNearestAnimal()
+    local hrp = getHRP()
+    if not hrp then return nil end
+    local pos = hrp.Position
+    local nearest, minDist = nil, math.huge
+    for _, a in ipairs(allAnimalsCache) do
+        local dist = (pos - a.worldPosition).Magnitude
+        if dist < minDist and dist <= GRAB_RADIUS and a.prompt then
+            minDist = dist
+            nearest = a
+        end
     end
+    return nearest
+end
 
-    task.wait(0.2)
-    setProgress(0)
+local function trySteal(prompt)
+    if not prompt or (os.clock() - (LastActionTime or 0)) < BASE_COOLDOWN then return end
+    LastActionTime = os.clock()
+
+    statusLabel.Text = "STEALING..."
+    setProgress(100, true)
+
+    pcall(function()
+        prompt.HoldDuration = 0
+        prompt:InputHoldBegin()
+        task.wait(0.007)
+        prompt:InputHoldEnd()
+        prompt:InputTrigger()
+        task.wait(0.007)
+        prompt:InputTrigger()
+    end)
+
+    task.wait(BASE_COOLDOWN * 0.55)
+    statusLabel.Text = "STATUS: IDLE"
+    setProgress(0, true)
 end
 
 -- ====================== BUTTON LOGIC ======================
 stealButton.MouseButton1Click:Connect(function()
-    local prompt = getNearestAnimal()
-    if prompt then
-        trySteal(prompt)
+    local animal = getNearestAnimal()
+    if animal and animal.prompt then
+        trySteal(animal.prompt)
     end
 end)
 
 autoButton.MouseButton1Click:Connect(function()
     AutoSpamEnabled = not AutoSpamEnabled
-    autoButton.Text = AutoSpamEnabled and "AUTO: ON" or "AUTO: OFF"
+    autoButton.Text = AutoSpamEnabled and "AUTO SPAM: ON" or "AUTO SPAM: OFF"
 end)
 
--- ====================== LOOP ======================
+antiLagBtn.MouseButton1Click:Connect(function()
+    antiLagEnabled = not antiLagEnabled
+    antiLagBtn.Text = antiLagEnabled and "ANTI LAG: ON" or "ANTI LAG: OFF"
+    antiLagBtn.BackgroundColor3 = antiLagEnabled and Color3.fromRGB(35,35,35) or Color3.fromRGB(25,25,25)
+    applyAntiLag(antiLagEnabled)
+end)
+
+ultraBtn.MouseButton1Click:Connect(function()
+    ultraModeEnabled = not ultraModeEnabled
+    ultraBtn.Text = ultraModeEnabled and "ULTRA MODE: ON" or "ULTRA MODE: OFF"
+    ultraBtn.BackgroundColor3 = ultraModeEnabled and Color3.fromRGB(35,35,35) or Color3.fromRGB(25,25,25)
+    applyUltraMode(ultraModeEnabled)
+end)
+
+-- ====================== MAIN LOOP ======================
 task.spawn(function()
     while true do
-        task.wait(0.05)
-        if AutoSpamEnabled then
-            local prompt = getNearestAnimal()
-            if prompt then
-                trySteal(prompt)
+        task.wait(0.03)
+        local animal = getNearestAnimal()
+        
+        if animal then
+            if progressBar.Size.X.Scale < 0.85 then
+                setProgress(88, false)
             end
+            if AutoSpamEnabled then
+                trySteal(animal.prompt)
+            end
+        else
+            setProgress(0, true)
         end
     end
 end)
 
-print("Pulse UI Loaded (Safe Mode)")
+task.spawn(function()
+    task.wait(1.2)
+    rebuildAnimalCache()
+    while true do
+        task.wait(13)
+        rebuildAnimalCache()
+    end
+end)
+
+print("Pulse Insta Grab - Progress sub frame + transparențe ajustate")
